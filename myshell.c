@@ -68,15 +68,11 @@ void findRedirect(char *args[]) {               // リダイレクトの指示�
 }
 
 void redirect(int fd, char *path, int flag) {   // リダイレクト処理をする
-  //
-  // externalCom 関数のどこかから呼び出される
-  //
-  // fd   : リダイレクトするファイルディスクリプタ
-  // path : リダイレクト先ファイル
-  // flag : open システムコールに渡すフラグ
-  //        入力の場合 O_RDONLY
-  //        出力の場合 O_WRONLY|O_TRUNC|O_CREAT
-  //
+  close(fd);
+  if (open(path, flag, 0644) != fd) {
+    fprintf(stderr, "something is wrong\n");
+    exit(1);
+  }
 }
 
 void externalCom(char *args[]) {                // 外部コマンドを実行する
@@ -86,6 +82,10 @@ void externalCom(char *args[]) {                // 外部コマンドを実行�
     exit(1);                                    //     非常事態，親を終了
   }
   if (pid==0) {                                 //   子プロセスなら
+    if (ifile != NULL)
+      redirect(0, ifile, O_RDONLY);
+    if (ofile != NULL)
+      redirect(1, ofile, O_WRONLY|O_CREAT|O_TRUNC);
     execvp(args[0], args);                      //     コマンドを実行
     perror(args[0]);
     exit(1);
@@ -130,3 +130,58 @@ int main() {
   return 0;
 }
 
+/* 実行例
+Command: ls
+Makefile	README.md	README.pdf	myshell		myshell.c   --a.txtが存在しないことを確認
+Command: echo aaa bbb > a.txt
+Command: ls
+Makefile	README.pdf	myshell
+README.md	a.txt		myshell.c
+Command: cat a.txt                                    --作成と出力がきちんとできている
+aaa bbb
+Command: ls > a.txt                                   --上書きをしてみる
+Command: cat a.txt                                    --きちんと上書きができている
+Makefile
+README.md
+README.pdf
+a.txt
+myshell
+myshell.c
+Command: echo ccc > b.txt c.txt                       --リダイレクトを中間に記述してみる
+Command: ls
+Makefile	README.pdf	b.txt		myshell.c
+README.md	a.txt		myshell
+Command: cat b.txt                                    --きちんと動作している
+ccc c.txt
+Command: ls > a.txt                                   --もう一度lsの結果をa.txtに出力
+Command: cat a.txt
+Makefile
+README.md
+README.pdf
+a.txt
+b.txt
+myshell
+myshell.c
+Command: grep txt < a.txt                             --リダイレクト入力を用いて、a.txtの中のtxtを含む行を表示
+a.txt
+b.txt
+Command: grep < a.txt txt                             --リダイレクトを間に記述しても正しく動作
+a.txt
+b.txt
+Command: grep abc < c.txt                             --存在しないファイルから入力したとき
+something is wrong
+Command: cat < dir                                    --ディレクトリから入力しようとした時
+cat: stdin: Is a directory
+Command: mkdir dir
+Command: ls > dir/a.txt                               --ディレクトリを作り、その中のファイルにリダイレクト出力
+Command: cat a.txt
+Makefile
+README.md
+README.pdf
+a.txt
+b.txt
+myshell
+myshell.c
+Command: ls > dir                                     --ディレクトリにリダイレクト出力をしようとしてみる
+something is wrong
+*/
